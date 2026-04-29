@@ -1,7 +1,8 @@
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.1.1";
 const META_FILE = "meta.json";
 const VAULT_FILE = "vault.json.enc";
 const FILES_DIR = "files";
+const FILE_MAGIC = "MYA1";
 const DB_NAME = "myAssistantApp";
 const DB_STORE = "handles";
 const KDF_ITERATIONS = 600000;
@@ -26,6 +27,7 @@ const els = {
   pinConfirmInput: document.querySelector("#pinConfirmInput"),
   pinSubmitButton: document.querySelector("#pinSubmitButton"),
   workspacePanel: document.querySelector("#workspacePanel"),
+  resumeVaultButton: document.querySelector("#resumeVaultButton"),
   createVaultButton: document.querySelector("#createVaultButton"),
   openVaultButton: document.querySelector("#openVaultButton"),
   lockButton: document.querySelector("#lockButton"),
@@ -51,8 +53,15 @@ async function init() {
   bindEvents();
 
   const savedHandle = await getSavedHandle();
-  if (savedHandle && await ensurePermission(savedHandle, false)) {
+  if (savedHandle) {
     state.dirHandle = savedHandle;
+    els.resumeVaultButton.classList.remove("hidden");
+
+    if (!await hasPermission(savedHandle, false)) {
+      toast("Previous vault remembered. Tap Resume Previous Vault to grant access.");
+      return;
+    }
+
     try {
       state.meta = await readJsonFile(savedHandle, META_FILE);
       showUnlock("unlock");
@@ -64,12 +73,36 @@ async function init() {
 }
 
 function bindEvents() {
+  els.resumeVaultButton.addEventListener("click", resumeSavedVaultFlow);
   els.createVaultButton.addEventListener("click", createVaultFlow);
   els.openVaultButton.addEventListener("click", openVaultFlow);
   els.pinForm.addEventListener("submit", submitPin);
   els.lockButton.addEventListener("click", lockVault);
   els.noteForm.addEventListener("submit", saveRecord);
   els.fileForm.addEventListener("submit", saveEncryptedFile);
+}
+
+async function resumeSavedVaultFlow() {
+  if (!state.dirHandle) {
+    toast("No previous vault is remembered on this device.");
+    return;
+  }
+
+  try {
+    await ensurePermission(state.dirHandle, true);
+    state.meta = await readJsonFile(state.dirHandle, META_FILE);
+
+    if (state.meta.app !== "myAssistant" || state.meta.kind !== "encrypted-vault") {
+      toast("The remembered folder does not look like a myAssistant vault.");
+      await clearSavedHandle();
+      els.resumeVaultButton.classList.add("hidden");
+      return;
+    }
+
+    showUnlock("unlock");
+  } catch (error) {
+    toast(cleanError(error, "Could not resume the remembered vault."));
+  }
 }
 
 function renderSupportChecks() {
@@ -268,14 +301,14 @@ async function saveEncryptedFile(event) {
   const encryptedName = `${fileId}.bin.enc`;
   const fileBytes = new Uint8Array(await file.arrayBuffer());
   const encrypted = await encryptBytes(state.vaultKey, fileBytes);
-  const envelope = {
+  const encryptedFile = packEncryptedFile({
     algorithm: "AES-GCM",
     iv: encrypted.iv,
-    data: encrypted.data
-  };
+    ciphertext: base64ToBytes(encrypted.data)
+  });
 
   const filesDir = await state.dirHandle.getDirectoryHandle(FILES_DIR, { create: true });
-  await writeTextFile(filesDir, encryptedName, JSON.stringify(envelope));
+  await writeBinaryFile(filesDir, encryptedName, encryptedFile);
 
   state.data.files.unshift({
     id: fileId,
@@ -283,6 +316,7 @@ async function saveEncryptedFile(event) {
     type: file.type || "application/octet-stream",
     size: file.size,
     encryptedName,
+    encryptionFormat: "binary-v1",
     createdAt: new Date().toISOString()
   });
   state.data.updatedAt = new Date().toISOString();
@@ -298,7 +332,7 @@ async function decryptFile(fileId) {
 
   try {
     const filesDir = await state.dirHandle.getDirectoryHandle(FILES_DIR);
-    const envelope = await readJsonFile(filesDir, fileMeta.encryptedName);
+    const envelope = await readEncryptedFile(filesDir, fileMeta.encryptedName);
     const bytes = await decryptBytes(state.vaultKey, envelope);
     const blob = new Blob([bytes], { type: fileMeta.type });
     const url = URL.createObjectURL(blob);
@@ -444,6 +478,11 @@ async function ensurePermission(handle, writable) {
   return await handle.requestPermission(options) === "granted";
 }
 
+async function hasPermission(handle, writable) {
+  const options = { mode: writable ? "readwrite" : "read" };
+  return await handle.queryPermission(options) === "granted";
+}
+
 async function fileExists(dirHandle, fileName) {
   try {
     await dirHandle.getFileHandle(fileName);
@@ -468,6 +507,64 @@ async function writeTextFile(dirHandle, fileName, text) {
   const writable = await fileHandle.createWritable();
   await writable.write(text);
   await writable.close();
+}
+
+async function writeBinaryFile(dirHandle, fileName, bytes) {
+  const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(bytes);
+  await writable.close();
+}
+
+async function readBinaryFile(dirHandle, fileName) {
+  const fileHandle = await dirHandle.getFileHandle(fileName);
+  const file = await fileHandle.getFile();
+  return new Uint8Array(await file.arrayBuffer());
+}
+
+async function readEncryptedFile(dirHandle, fileName) {
+  const bytes = await readBinaryFile(dirHandle, fileName);
+
+  if (looksLikeBinaryEncryptedFile(bytes)) {
+    return unpackEncryptedFile(bytes);
+  }
+
+  // Legacy prototype format: JSON with Base64 ciphertext.
+  const text = new TextDecoder().decode(bytes);
+  return JSON.parse(text);
+}
+
+function packEncryptedFile({ algorithm, iv, ciphertext }) {
+  const headerBytes = new TextEncoder().encode(JSON.stringify({ algorithm, iv }));
+  const magicBytes = new TextEncoder().encode(FILE_MAGIC);
+  const output = new Uint8Array(8 + headerBytes.length + ciphertext.length);
+  const view = new DataView(output.buffer);
+
+  output.set(magicBytes, 0);
+  view.setUint32(4, headerBytes.length, false);
+  output.set(headerBytes, 8);
+  output.set(ciphertext, 8 + headerBytes.length);
+  return output;
+}
+
+function unpackEncryptedFile(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const headerLength = view.getUint32(4, false);
+  const headerStart = 8;
+  const headerEnd = headerStart + headerLength;
+  const header = JSON.parse(new TextDecoder().decode(bytes.slice(headerStart, headerEnd)));
+  const ciphertext = bytes.slice(headerEnd);
+
+  return {
+    algorithm: header.algorithm,
+    iv: header.iv,
+    data: bytesToBase64(ciphertext)
+  };
+}
+
+function looksLikeBinaryEncryptedFile(bytes) {
+  if (bytes.length < 8) return false;
+  return new TextDecoder().decode(bytes.slice(0, 4)) === FILE_MAGIC;
 }
 
 function openDb() {

@@ -43,7 +43,7 @@ AssistantVault/
 
 `vault.json.enc` contains encrypted structured data, currently notes and file metadata.
 
-`files/` contains encrypted copies of user-selected files.
+`files/` contains encrypted binary copies of user-selected files.
 
 ## Encryption Model
 
@@ -63,8 +63,20 @@ The vault currently uses:
 - 600,000 iterations
 - AES-GCM with 256-bit keys
 - a fresh 96-bit IV for each encryption operation
+- binary encrypted file storage for uploaded files, avoiding Base64 size overhead
 
 This design makes future PIN changes easier because only the wrapped vault key needs to be re-encrypted.
+
+Uploaded files use a small binary container:
+
+```text
+4 bytes  magic: MYA1
+4 bytes  big-endian header length
+N bytes  JSON header with algorithm and IV
+rest     AES-GCM ciphertext bytes
+```
+
+The encrypted file is only slightly larger than the original file. The older prototype Base64 JSON file format can still be read for compatibility.
 
 ## Recovery And Reinstall Flow
 
@@ -73,10 +85,13 @@ The vault folder is the source of truth. Browser storage is only a convenience.
 If the PWA is uninstalled, browser data is cleared, or the saved directory handle is lost:
 
 1. Open the app again.
-2. Choose **Open Existing Vault**.
-3. Select the same SD-card vault folder.
-4. Enter the PIN or passphrase.
-5. The encrypted vault data is restored.
+2. If **Resume Previous Vault** appears, tap it and grant folder access.
+3. If no previous vault is remembered, choose **Open Existing Vault**.
+4. Select the same SD-card vault folder when asked.
+5. Enter the PIN or passphrase.
+6. The encrypted vault data is restored.
+
+On a normal reload or close/open cycle, the app stores the selected directory handle in IndexedDB. If the browser still trusts that handle, the app goes directly to the PIN screen. If the browser kept the handle but dropped permission, the app shows **Resume Previous Vault** so permission can be renewed with a user gesture.
 
 If the PIN or passphrase is forgotten, the encrypted vault cannot be recovered.
 
