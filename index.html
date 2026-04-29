@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#135d54">
+    <title>myAssistant Vault</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Local encrypted vault</p>
+          <h1>myAssistant</h1>
+        </div>
+        <div class="status-pill" id="appStatus">Locked</div>
+      </header>
+
+      <section class="panel" id="supportPanel">
+        <h2>Device Check</h2>
+        <div class="check-grid" id="supportChecks"></div>
+      </section>
+
+      <section class="panel" id="welcomePanel">
+        <h2>Start</h2>
+        <div class="actions">
+          <button class="primary" id="createVaultButton">Create New Vault</button>
+          <button id="openVaultButton">Open Existing Vault</button>
+        </div>
+        <p class="hint">
+          The selected folder is the source of truth. If the app is reinstalled or browser data is cleared,
+          choose Open Existing Vault and select the same folder again.
+        </p>
+      </section>
+
+      <section class="panel hidden" id="pinPanel">
+        <h2 id="pinTitle">Unlock Vault</h2>
+        <form id="pinForm">
+          <label for="pinInput">PIN or passphrase</label>
+          <input id="pinInput" type="password" autocomplete="current-password" minlength="6" required>
+          <label class="hidden" id="pinConfirmLabel" for="pinConfirmInput">Confirm PIN or passphrase</label>
+          <input class="hidden" id="pinConfirmInput" type="password" autocomplete="new-password" minlength="6">
+          <button class="primary" type="submit" id="pinSubmitButton">Unlock</button>
+        </form>
+        <p class="hint" id="pinHint">Forgotten PIN means the encrypted vault cannot be recovered.</p>
+      </section>
+
+      <section class="workspace hidden" id="workspacePanel">
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Vault</h2>
+              <p class="hint" id="vaultName">No folder selected</p>
+            </div>
+            <button id="lockButton">Lock</button>
+          </div>
+          <dl class="stats">
+            <div>
+              <dt>Records</dt>
+              <dd id="recordCount">0</dd>
+            </div>
+            <div>
+              <dt>Files</dt>
+              <dd id="fileCount">0</dd>
+            </div>
+            <div>
+              <dt>Updated</dt>
+              <dd id="updatedAt">Never</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="panel">
+          <h2>Encrypted Notes Test</h2>
+          <form id="noteForm">
+            <label for="noteText">Text or numeric information</label>
+            <textarea id="noteText" rows="5" placeholder="Type a test record..."></textarea>
+            <button class="primary" type="submit">Save Encrypted Record</button>
+          </form>
+          <div class="list" id="recordList"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Encrypted File Test</h2>
+          <form id="fileForm">
+            <label for="fileInput">Choose a file to copy into the vault</label>
+            <input id="fileInput" type="file">
+            <button class="primary" type="submit">Encrypt File Into Vault</button>
+          </form>
+          <div class="list" id="fileList"></div>
+        </section>
+      </section>
+
+      <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
