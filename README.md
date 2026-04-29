@@ -50,6 +50,8 @@ Settings
 
 Most features use the same record model. Views are filtered ways to work with encrypted records.
 
+On mobile, the app uses a sticky header, compact vault status strip, and bottom navigation so it behaves more like an installed app than a long webpage. The running app version is shown near the app name.
+
 ## Vault Layout
 
 The selected vault folder uses this shape:

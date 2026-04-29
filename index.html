@@ -13,7 +13,10 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Encrypted local assistant</p>
-          <h1>myAssistant</h1>
+          <div class="brand-row">
+            <h1>myAssistant</h1>
+            <span class="version-badge" id="versionBadge">v0.0.0</span>
+          </div>
         </div>
         <div class="status-pill" id="appStatus">Locked</div>
       </header>
@@ -49,10 +52,9 @@
       </section>
 
       <section class="workspace hidden" id="workspacePanel">
-        <section class="panel dashboard">
+        <section class="vault-strip">
           <div class="section-heading">
             <div>
-              <h2 id="viewTitle">Home</h2>
               <p class="hint" id="vaultName">No folder selected</p>
             </div>
             <button id="lockButton">Lock</button>
@@ -85,7 +87,10 @@
           <button class="tab" data-view="settings" type="button">Settings</button>
         </nav>
 
-        <section class="view" id="viewRoot"></section>
+        <section class="view-frame">
+          <h2 id="viewTitle">Home</h2>
+          <div class="view" id="viewRoot"></div>
+        </section>
       </section>
 
       <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>

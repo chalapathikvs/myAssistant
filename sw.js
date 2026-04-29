@@ -1,4 +1,4 @@
-const CACHE_NAME = "myassistant-app-v4";
+const CACHE_NAME = "myassistant-app-v5";
 const APP_ASSETS = [
   "./",
   "./index.html",

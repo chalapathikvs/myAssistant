@@ -108,7 +108,7 @@ h3 {
   width: min(100%, 900px);
   margin: 0 auto;
   padding: 16px;
-  padding-bottom: 28px;
+  padding-bottom: 92px;
 }
 
 .topbar,
@@ -121,8 +121,15 @@ h3 {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   align-items: center;
-  padding: 8px 0 16px;
+  margin: 0 -16px 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(244, 247, 243, 0.96);
+  backdrop-filter: blur(12px);
 }
 
 .eyebrow {
@@ -134,7 +141,9 @@ h3 {
 }
 
 .panel,
-.record-card {
+.record-card,
+.vault-strip,
+.view-frame {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -151,9 +160,17 @@ h3 {
   gap: 14px;
 }
 
+.brand-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .status-pill,
 .badge,
-.tag {
+.tag,
+.version-badge {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -164,6 +181,13 @@ h3 {
   font-size: 0.83rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.version-badge {
+  min-height: 24px;
+  background: #fff;
+  color: var(--accent);
+  font-size: 0.78rem;
 }
 
 .badge.ok {
@@ -238,7 +262,7 @@ h3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin: 14px 0 0;
+  margin: 10px 0 0;
 }
 
 .stats div {
@@ -261,14 +285,26 @@ h3 {
 }
 
 .tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  width: min(100%, 900px);
+  margin: 0 auto;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: rgba(244, 247, 243, 0.96);
+  backdrop-filter: blur(12px);
 }
 
 .tab {
   min-width: max-content;
+  min-height: 40px;
+  padding: 0 12px;
   background: #fff;
 }
 
@@ -281,6 +317,19 @@ h3 {
 .view {
   display: grid;
   gap: 14px;
+}
+
+.vault-strip,
+.view-frame {
+  padding: 14px;
+}
+
+.view-frame {
+  min-height: calc(100vh - 310px);
+}
+
+.view-frame > h2 {
+  margin-bottom: 12px;
 }
 
 .record-card {
@@ -334,5 +383,21 @@ h3 {
 
   .form-grid .wide {
     grid-column: 1 / -1;
+  }
+
+  .app-shell {
+    padding-bottom: 28px;
+  }
+
+  .tabs {
+    position: sticky;
+    top: 79px;
+    bottom: auto;
+    width: auto;
+    margin: 0;
+    padding: 0 0 2px;
+    border-top: 0;
+    background: transparent;
+    backdrop-filter: none;
   }
 }

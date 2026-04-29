@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.2.1";
 const META_FILE = "meta.json";
 const VAULT_FILE = "vault.json.enc";
 const FILES_DIR = "files";
@@ -71,6 +71,8 @@ const state = {
 
 const els = {
   appStatus: document.querySelector("#appStatus"),
+  versionBadge: document.querySelector("#versionBadge"),
+  supportPanel: document.querySelector("#supportPanel"),
   supportChecks: document.querySelector("#supportChecks"),
   welcomePanel: document.querySelector("#welcomePanel"),
   pinPanel: document.querySelector("#pinPanel"),
@@ -98,6 +100,7 @@ const els = {
 init();
 
 async function init() {
+  els.versionBadge.textContent = `v${APP_VERSION}`;
   renderSupportChecks();
   registerServiceWorker();
   checkForAppUpdate();
@@ -425,6 +428,7 @@ function normalizeRecord(record) {
 
 function renderApp() {
   els.appStatus.textContent = "Unlocked";
+  els.supportPanel.classList.add("hidden");
   els.pinPanel.classList.add("hidden");
   els.welcomePanel.classList.add("hidden");
   els.workspacePanel.classList.remove("hidden");
@@ -1289,6 +1293,7 @@ function lockVault(message = "Vault locked.") {
   state.data = null;
   clearTimeout(state.lockTimer);
   els.appStatus.textContent = "Locked";
+  els.supportPanel.classList.remove("hidden");
   showUnlock("unlock");
   toast(message);
 }
