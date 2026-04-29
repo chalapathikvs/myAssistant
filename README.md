@@ -11,6 +11,7 @@ The first goal is to prove the durable local vault flow:
 - protect the vault with a PIN or passphrase
 - save text and numeric entries into encrypted JSON
 - copy uploaded files into the same vault directory after encryption
+- delete encrypted uploaded files from inside the app
 - keep the app installable and cacheable as a PWA
 
 This is not yet a full assistant. It is the foundation that future assistant features should write through.
@@ -44,6 +45,8 @@ AssistantVault/
 `vault.json.enc` contains encrypted structured data, currently notes and file metadata.
 
 `files/` contains encrypted binary copies of user-selected files.
+
+Deleting an uploaded file inside the app removes both the encrypted file from `files/` and its metadata from `vault.json.enc`. Deleting files outside the app is possible, but it can leave stale metadata in the encrypted vault JSON.
 
 ## Encryption Model
 

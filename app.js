@@ -1,4 +1,4 @@
-const APP_VERSION = "0.1.1";
+const APP_VERSION = "0.1.2";
 const META_FILE = "meta.json";
 const VAULT_FILE = "vault.json.enc";
 const FILES_DIR = "files";
@@ -396,6 +396,7 @@ function renderWorkspace() {
           <div class="item-meta">${formatBytes(file.size)} - ${formatDate(file.createdAt)}</div>
           <div class="file-actions">
             <button data-file-id="${file.id}" type="button">Decrypt Download</button>
+            <button data-delete-file-id="${file.id}" type="button">Delete</button>
           </div>
         </article>
       `).join("")
@@ -404,6 +405,34 @@ function renderWorkspace() {
   els.fileList.querySelectorAll("[data-file-id]").forEach(button => {
     button.addEventListener("click", () => decryptFile(button.dataset.fileId));
   });
+  els.fileList.querySelectorAll("[data-delete-file-id]").forEach(button => {
+    button.addEventListener("click", () => deleteEncryptedFile(button.dataset.deleteFileId));
+  });
+}
+
+async function deleteEncryptedFile(fileId) {
+  const fileMeta = state.data.files.find(file => file.id === fileId);
+  if (!fileMeta) return;
+
+  const ok = window.confirm(`Delete "${fileMeta.name}" from this vault? This removes the encrypted file and its vault metadata.`);
+  if (!ok) return;
+
+  try {
+    const filesDir = await state.dirHandle.getDirectoryHandle(FILES_DIR);
+    try {
+      await filesDir.removeEntry(fileMeta.encryptedName);
+    } catch (error) {
+      if (error?.name !== "NotFoundError") throw error;
+    }
+
+    state.data.files = state.data.files.filter(file => file.id !== fileId);
+    state.data.updatedAt = new Date().toISOString();
+    await saveVaultData();
+    renderWorkspace();
+    toast("Encrypted file deleted from vault.");
+  } catch (error) {
+    toast(cleanError(error, "Could not delete encrypted file."));
+  }
 }
 
 function lockVault() {
