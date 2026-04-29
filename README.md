@@ -1,24 +1,28 @@
 # myAssistant Vault
 
-This is a bare PWA for testing the core storage model for an Android-first assistant app. The app code can be hosted on GitHub Pages, while user data lives in a user-selected local vault folder, such as a folder on an SD card.
+myAssistant is an Android-first, local-first encrypted PWA. The app code can be hosted on GitHub Pages, while user data lives in a user-selected local vault folder, such as a folder on an SD card.
 
 ## Current Intent
 
-The first goal is to prove the durable local vault flow:
+The app is now a usable foundation for a private assistant:
 
-- create a vault in a user-selected directory
-- open an existing vault after reinstall, browser cache clear, or lost app state
-- protect the vault with a PIN or passphrase
-- save text and numeric entries into encrypted JSON
-- copy uploaded files into the same vault directory after encryption
-- delete encrypted uploaded files from inside the app
-- keep the app installable and cacheable as a PWA
+- create or reopen an encrypted vault in a user-selected directory
+- unlock with a single strong password
+- remember the previous vault handle when the browser allows it
+- capture quick notes, journal entries, tasks, purchases, yoga notes, and research topics
+- organize records with tags, pinned items, favorites, dates, and due/revisit dates
+- store uploaded files, receipts, and warranty cards as encrypted binary files
+- move records/files to Trash, restore them, and manually purge them after confirmation
+- merge tags and add new tags
+- store AI/search/OCR provider API keys inside the encrypted vault
+- export a decrypted JSON copy after an explicit warning
+- lock after 30 seconds of inactivity or when the app is hidden
 
-This is not yet a full assistant. It is the foundation that future assistant features should write through.
+Future AI and OCR features should send only user-selected context after a consent screen.
 
-## Architecture
+## App Structure
 
-The app is a static PWA:
+The PWA is static:
 
 ```text
 index.html
@@ -30,7 +34,25 @@ version.json
 icons/
 ```
 
-The app expects a vault folder with this shape:
+The app UI is organized into views:
+
+```text
+Home
+Capture
+Notes
+Journal
+Tasks / Purchases
+Yoga
+Files / Receipts
+Trash
+Settings
+```
+
+Most features use the same record model. Views are filtered ways to work with encrypted records.
+
+## Vault Layout
+
+The selected vault folder uses this shape:
 
 ```text
 AssistantVault/
@@ -42,18 +64,52 @@ AssistantVault/
 
 `meta.json` is intentionally unencrypted and should not contain private user content. It identifies the folder as a myAssistant vault and stores cryptographic parameters such as salt and PBKDF2 iteration count.
 
-`vault.json.enc` contains encrypted structured data, currently notes and file metadata.
+`vault.json.enc` contains encrypted records, file metadata, tags, settings, trash state, and saved AI provider keys.
 
-`files/` contains encrypted binary copies of user-selected files.
+`files/` contains encrypted binary copies of uploaded files.
 
-Deleting an uploaded file inside the app removes both the encrypted file from `files/` and its metadata from `vault.json.enc`. Deleting files outside the app is possible, but it can leave stale metadata in the encrypted vault JSON.
+## Record Model
+
+The app stores typed records like:
+
+```js
+{
+  id,
+  type,
+  title,
+  body,
+  tagIds: [],
+  linkedFileIds: [],
+  pinned: false,
+  favorite: false,
+  createdAt,
+  updatedAt,
+  deletedAt: null,
+  purgeAfter: null,
+  data: {}
+}
+```
+
+Current record types include:
+
+```text
+quick_note
+journal
+task
+purchase
+yoga_note
+file_record
+receipt
+research_topic
+ai_response
+```
 
 ## Encryption Model
 
-The PIN or passphrase is not used directly to encrypt vault data.
+The password is not used directly to encrypt vault data.
 
 ```text
-PIN/passphrase + salt
+password + salt
   -> PBKDF2-SHA-256
   -> key-encryption key
   -> decrypts random vault key
@@ -68,7 +124,7 @@ The vault currently uses:
 - a fresh 96-bit IV for each encryption operation
 - binary encrypted file storage for uploaded files, avoiding Base64 size overhead
 
-This design makes future PIN changes easier because only the wrapped vault key needs to be re-encrypted.
+Changing the password re-wraps the random vault key. Existing records and files do not need to be fully re-encrypted.
 
 Uploaded files use a small binary container:
 
@@ -79,7 +135,18 @@ N bytes  JSON header with algorithm and IV
 rest     AES-GCM ciphertext bytes
 ```
 
-The encrypted file is only slightly larger than the original file. The older prototype Base64 JSON file format can still be read for compatibility.
+The older prototype Base64 JSON file format can still be read for compatibility.
+
+## Trash And Deletion
+
+Delete actions move items to Trash with a 10-day recovery window:
+
+- normal views hide deleted records/files
+- Trash can restore items
+- Purge permanently removes records and encrypted files
+- Purge always requires confirmation
+
+Deleting files outside the app is possible, but it can leave stale metadata in the encrypted vault JSON.
 
 ## Recovery And Reinstall Flow
 
@@ -91,12 +158,25 @@ If the PWA is uninstalled, browser data is cleared, or the saved directory handl
 2. If **Resume Previous Vault** appears, tap it and grant folder access.
 3. If no previous vault is remembered, choose **Open Existing Vault**.
 4. Select the same SD-card vault folder when asked.
-5. Enter the PIN or passphrase.
+5. Enter the password.
 6. The encrypted vault data is restored.
 
-On a normal reload or close/open cycle, the app stores the selected directory handle in IndexedDB. If the browser still trusts that handle, the app goes directly to the PIN screen. If the browser kept the handle but dropped permission, the app shows **Resume Previous Vault** so permission can be renewed with a user gesture.
+If the password is forgotten, the encrypted vault cannot be recovered.
 
-If the PIN or passphrase is forgotten, the encrypted vault cannot be recovered.
+## AI And Search Direction
+
+AI provider settings can be saved now, but the app does not yet call external AI/search/OCR APIs.
+
+The planned rule is:
+
+```text
+Local vault stays local.
+Only selected notes/files/excerpts are sent.
+The user sees and confirms the outgoing context first.
+AI responses are saved back as encrypted records.
+```
+
+Research outputs should be saved as normal encrypted records with source URLs, snippets, summaries, and run dates.
 
 ## Local Testing
 
@@ -128,11 +208,11 @@ The app uses relative paths so it can work from a repository subpath.
 
 The service worker caches the app shell for offline loading. The app also checks `version.json` with a cache-busting request and shows a notice when the hosted version differs from the running app.
 
-After changing app files, users may need to close and reopen the PWA, or refresh, before the new cached version takes over. Future versions should replace the simple notice with an explicit update button.
+After changing app files, users may need to close and reopen the PWA, or refresh, before the new cached version takes over. A future version should add an explicit **Update now** button.
 
 ## Important Limits
 
 - This app depends on the browser's File System Access API.
 - Android browser behavior around SD cards and persisted permissions must be tested on the target device.
-- Fingerprint or biometric unlock is not included. A future native wrapper could use biometrics as a convenience unlock, but the PIN/passphrase should remain the real vault recovery secret.
-- Encrypted downloaded files are decrypted only inside the app session. The current test app uses a browser download flow for decrypted file retrieval.
+- Fingerprint or biometric unlock is not included. A future native wrapper could use biometrics as a convenience unlock, but the password remains the real vault recovery secret.
+- Browser voice input, notifications, background checks, OCR, and AI calls are future phases.

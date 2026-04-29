@@ -12,7 +12,7 @@
     <main class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Local encrypted vault</p>
+          <p class="eyebrow">Encrypted local assistant</p>
           <h1>myAssistant</h1>
         </div>
         <div class="status-pill" id="appStatus">Locked</div>
@@ -32,27 +32,27 @@
         </div>
         <p class="hint">
           The selected folder is the source of truth. If the app is reinstalled or browser data is cleared,
-          choose Open Existing Vault and select the same folder again.
+          open the existing vault folder again and enter your password.
         </p>
       </section>
 
       <section class="panel hidden" id="pinPanel">
         <h2 id="pinTitle">Unlock Vault</h2>
         <form id="pinForm">
-          <label for="pinInput">PIN or passphrase</label>
+          <label for="pinInput">Password</label>
           <input id="pinInput" type="password" autocomplete="current-password" minlength="6" required>
-          <label class="hidden" id="pinConfirmLabel" for="pinConfirmInput">Confirm PIN or passphrase</label>
+          <label class="hidden" id="pinConfirmLabel" for="pinConfirmInput">Confirm password</label>
           <input class="hidden" id="pinConfirmInput" type="password" autocomplete="new-password" minlength="6">
           <button class="primary" type="submit" id="pinSubmitButton">Unlock</button>
         </form>
-        <p class="hint" id="pinHint">Forgotten PIN means the encrypted vault cannot be recovered.</p>
+        <p class="hint">Forgotten password means the encrypted vault cannot be recovered.</p>
       </section>
 
       <section class="workspace hidden" id="workspacePanel">
-        <section class="panel">
+        <section class="panel dashboard">
           <div class="section-heading">
             <div>
-              <h2>Vault</h2>
+              <h2 id="viewTitle">Home</h2>
               <p class="hint" id="vaultName">No folder selected</p>
             </div>
             <button id="lockButton">Lock</button>
@@ -67,31 +67,25 @@
               <dd id="fileCount">0</dd>
             </div>
             <div>
-              <dt>Updated</dt>
-              <dd id="updatedAt">Never</dd>
+              <dt>Trash</dt>
+              <dd id="trashCount">0</dd>
             </div>
           </dl>
         </section>
 
-        <section class="panel">
-          <h2>Encrypted Notes Test</h2>
-          <form id="noteForm">
-            <label for="noteText">Text or numeric information</label>
-            <textarea id="noteText" rows="5" placeholder="Type a test record..."></textarea>
-            <button class="primary" type="submit">Save Encrypted Record</button>
-          </form>
-          <div class="list" id="recordList"></div>
-        </section>
+        <nav class="tabs" id="tabs" aria-label="App views">
+          <button class="tab active" data-view="home" type="button">Home</button>
+          <button class="tab" data-view="capture" type="button">Capture</button>
+          <button class="tab" data-view="notes" type="button">Notes</button>
+          <button class="tab" data-view="journal" type="button">Journal</button>
+          <button class="tab" data-view="tasks" type="button">Tasks</button>
+          <button class="tab" data-view="yoga" type="button">Yoga</button>
+          <button class="tab" data-view="files" type="button">Files</button>
+          <button class="tab" data-view="trash" type="button">Trash</button>
+          <button class="tab" data-view="settings" type="button">Settings</button>
+        </nav>
 
-        <section class="panel">
-          <h2>Encrypted File Test</h2>
-          <form id="fileForm">
-            <label for="fileInput">Choose a file to copy into the vault</label>
-            <input id="fileInput" type="file">
-            <button class="primary" type="submit">Encrypt File Into Vault</button>
-          </form>
-          <div class="list" id="fileList"></div>
-        </section>
+        <section class="view" id="viewRoot"></section>
       </section>
 
       <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
