@@ -16,6 +16,7 @@
           <div class="brand-row">
             <h1>myAssistant</h1>
             <span class="version-badge" id="versionBadge">v0.0.0</span>
+            <span id="nativeBadge" style="display:none; background: #4caf50; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 5px;">Native</span>
           </div>
         </div>
         <div class="status-pill" id="appStatus">Locked</div>
@@ -32,6 +33,7 @@
           <button class="primary hidden" id="resumeVaultButton">Resume Previous Vault</button>
           <button class="primary" id="createVaultButton">Create New Vault</button>
           <button id="openVaultButton">Open Existing Vault</button>
+          <button onclick="location.reload(true)" style="margin-top: 10px; opacity: 0.6; font-size: 0.8rem;">Refresh App</button>
         </div>
         <p class="hint">
           The selected folder is the source of truth. If the app is reinstalled or browser data is cleared,

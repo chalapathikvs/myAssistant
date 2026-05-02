@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.3";
+const APP_VERSION = "0.2.5";
 const META_FILE = "meta.json";
 const VAULT_FILE = "vault.json.enc";
 const FILES_DIR = "files";
@@ -64,11 +64,7 @@ const state = {
   vaultKey: null,
   currentPassword: null,
   data: null,
-  filters: {
-    search: "",
-    tag: "",
-    type: ""
-  },
+  filters: { search: "", tag: "", type: "" },
   lockTimer: null
 };
 
@@ -104,6 +100,17 @@ init();
 
 async function init() {
   els.versionBadge.textContent = `v${APP_VERSION}`;
+
+  // Wait a bit for Native injection if needed
+  if (!isNative()) {
+    await new Promise(r => setTimeout(r, 150));
+  }
+
+  if (isNative()) {
+    const nb = document.querySelector("#nativeBadge");
+    if (nb) nb.style.display = "inline-block";
+  }
+
   renderSupportChecks();
   registerServiceWorker();
   checkForAppUpdate();
@@ -114,14 +121,11 @@ async function init() {
   if (savedHandle) {
     state.dirHandle = savedHandle;
     els.resumeVaultButton.classList.remove("hidden");
-
     if (state.dirHandle.isNative || await hasPermission(savedHandle, false)) {
       try {
         state.meta = await readJsonFile(state.dirHandle, META_FILE);
         showUnlock("unlock");
-      } catch {
-        await clearSavedHandle();
-      }
+      } catch { await clearSavedHandle(); }
     }
   }
 }
@@ -137,7 +141,6 @@ function bindEvents() {
     if (!button) return;
     setView(button.dataset.view);
   });
-
   ["pointerdown", "keydown", "touchstart"].forEach(name => {
     document.addEventListener(name, resetLockTimer, { passive: true });
   });
@@ -146,11 +149,15 @@ function bindEvents() {
   });
 }
 
-// Helper to check if we are running in the Android Wrapper
-const isNative = () => typeof window.NativeStorage !== "undefined";
+function isNative() {
+  return typeof window.NativeStorage !== "undefined" || typeof NativeStorage !== "undefined";
+}
+
+function getNative() {
+  return window.NativeStorage || NativeStorage;
+}
 
 function initNativeBridge() {
-  // Handle Notifications from Native
   window.onNotificationReceived = async function(data) {
     if (!state.vaultKey || !state.data) return;
     const now = new Date().toISOString();
@@ -159,8 +166,7 @@ function initNativeBridge() {
       title: `${data.title || "No Title"} (${data.package})`,
       body: data.text || "",
       tagIds: tagNamesToIds(["notification", data.package.split(".").pop()]),
-      createdAt: now,
-      updatedAt: now,
+      createdAt: now, updatedAt: now,
       data: { package: data.package, intent: data.intent }
     });
     state.data.records.unshift(record);
@@ -169,7 +175,6 @@ function initNativeBridge() {
     toast(`Notification captured from ${data.package}`);
   };
 
-  // Handle Folder selection from Native
   window.onNativeFolderPicked = async function(folderName) {
     if (!folderName) {
       toast("Folder selection cancelled.");
@@ -178,16 +183,14 @@ function initNativeBridge() {
     const nativeHandle = { isNative: true, name: folderName };
     state.dirHandle = nativeHandle;
     await saveHandle(nativeHandle);
-
     if (state.mode === "create") {
       showUnlock("create");
     } else {
       try {
         state.meta = await readJsonFile(nativeHandle, META_FILE);
+        validateMeta(state.meta);
         showUnlock("unlock");
-      } catch (e) {
-        toast("Folder does not contain a valid vault.");
-      }
+      } catch (e) { toast("Folder does not contain a valid vault."); }
     }
   };
 }
@@ -199,7 +202,6 @@ function renderSupportChecks() {
     ["Service Worker", "serviceWorker" in navigator],
     ["Secure Context", window.isSecureContext]
   ];
-
   els.supportChecks.innerHTML = checks.map(([label, ok]) => `
     <div class="check-row">
       <strong>${escapeHtml(label)}</strong>
@@ -209,14 +211,11 @@ function renderSupportChecks() {
 }
 
 async function resumeSavedVaultFlow() {
-  if (state.dirHandle?.isNative) {
-    showUnlock("unlock"); // Native permissions are persisted by Android
-    return;
-  }
-  // Standard Browser Flow
+  if (state.dirHandle?.isNative) { showUnlock("unlock"); return; }
   try {
     await ensurePermission(state.dirHandle, true);
     state.meta = await readJsonFile(state.dirHandle, META_FILE);
+    validateMeta(state.meta);
     showUnlock("unlock");
   } catch (error) { toast(cleanError(error)); }
 }
@@ -224,10 +223,9 @@ async function resumeSavedVaultFlow() {
 async function createVaultFlow() {
   if (isNative()) {
     state.mode = "create";
-    NativeStorage.pickFolder();
+    getNative().pickFolder();
     return;
   }
-  // Standard Browser Flow
   try {
     const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
     if (await fileExists(dirHandle, META_FILE)) { toast("Existing vault found."); return; }
@@ -240,34 +238,36 @@ async function createVaultFlow() {
 async function openVaultFlow() {
   if (isNative()) {
     state.mode = "unlock";
-    NativeStorage.pickFolder();
+    getNative().pickFolder();
     return;
   }
-  // Standard Browser Flow
   try {
     const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    state.meta = await readJsonFile(dirHandle, META_FILE);
+    const meta = await readJsonFile(dirHandle, META_FILE);
+    validateMeta(meta);
+    state.mode = "unlock";
     state.dirHandle = dirHandle;
+    state.meta = meta;
     await saveHandle(dirHandle);
     showUnlock("unlock");
   } catch (error) { toast(cleanError(error)); }
 }
 
 async function writeJsonFile(dirHandle, fileName, value) {
+  const content = JSON.stringify(value, null, 2);
   if (dirHandle.isNative) {
-    const success = NativeStorage.writeFile(fileName, JSON.stringify(value, null, 2));
-    if (!success) throw new Error("Native write failed");
+    if (!getNative().writeFile(fileName, content)) throw new Error("Native write failed");
     return;
   }
   const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
   const writable = await fileHandle.createWritable();
-  await writable.write(JSON.stringify(value, null, 2));
+  await writable.write(content);
   await writable.close();
 }
 
 async function readJsonFile(dirHandle, fileName) {
   if (dirHandle.isNative) {
-    const content = NativeStorage.readFile(fileName);
+    const content = getNative().readFile(fileName);
     if (!content) throw new Error("File not found");
     return JSON.parse(content);
   }
@@ -277,7 +277,7 @@ async function readJsonFile(dirHandle, fileName) {
 }
 
 async function fileExists(dirHandle, fileName) {
-  if (dirHandle.isNative) return NativeStorage.fileExists(fileName);
+  if (dirHandle.isNative) return getNative().fileExists(fileName);
   try { await dirHandle.getFileHandle(fileName); return true; } catch { return false; }
 }
 
@@ -306,12 +306,13 @@ async function submitPassword(event) {
   event.preventDefault();
   const password = els.pinInput.value;
   if (password.length < 6) { toast("Use at least 6 characters."); return; }
+  if (state.mode === "create" && password !== els.pinConfirmInput.value) { toast("Passwords don't match."); return; }
   try {
     if (state.mode === "create") await createVault(password);
     else await unlockVault(password);
     els.pinInput.value = "";
     renderApp();
-  } catch (error) { toast(cleanError(error)); }
+  } catch (error) { toast(cleanError(error, "Could not unlock vault. Check password.")); }
 }
 
 async function createVault(password) {
@@ -320,23 +321,13 @@ async function createVault(password) {
   const vaultKeyBytes = crypto.getRandomValues(new Uint8Array(32));
   const vaultKey = await importAesKey(vaultKeyBytes);
   const wrappedVaultKey = await encryptBytes(kek, vaultKeyBytes);
-
   state.meta = {
-    app: "myAssistant",
-    kind: "encrypted-vault",
-    vaultVersion: 2,
-    appVersion: APP_VERSION,
-    createdAt: new Date().toISOString(),
-    crypto: {
-      kdf: "PBKDF2", salt: bytesToBase64(salt), iterations: KDF_ITERATIONS,
-      keyWrap: { algorithm: "AES-GCM", iv: wrappedVaultKey.iv, data: wrappedVaultKey.data }
-    }
+    app: "myAssistant", kind: "encrypted-vault", vaultVersion: 2, appVersion: APP_VERSION, createdAt: new Date().toISOString(),
+    crypto: { kdf: "PBKDF2", salt: bytesToBase64(salt), iterations: KDF_ITERATIONS, keyWrap: { algorithm: "AES-GCM", iv: wrappedVaultKey.iv, data: wrappedVaultKey.data } }
   };
-
   state.vaultKey = vaultKey;
   state.currentPassword = password;
   state.data = createEmptyVaultData();
-
   await writeJsonFile(state.dirHandle, META_FILE, state.meta);
   await saveVaultData();
   toast("Encrypted vault created.");
@@ -349,7 +340,6 @@ async function unlockVault(password) {
   const vaultKeyBytes = await decryptBytes(kek, cryptoMeta.keyWrap);
   const vaultKey = await importAesKey(vaultKeyBytes);
   const data = await readVaultData(state.dirHandle, vaultKey);
-
   state.vaultKey = vaultKey;
   state.currentPassword = password;
   state.data = migrateVaultData(data);
@@ -368,7 +358,7 @@ function createEmptyVaultData() {
 
 function migrateVaultData(data) {
   const migrated = { ...createEmptyVaultData(), ...data };
-  migrated.records = migrated.records.map(normalizeRecord);
+  migrated.records = (data.records || []).map(normalizeRecord);
   return migrated;
 }
 
@@ -408,33 +398,33 @@ function renderView() {
   els.viewTitle.textContent = VIEW_TITLES[state.view] || "Home";
   els.vaultName.textContent = `${state.dirHandle?.name || "Vault"}`;
   els.recordCount.textContent = activeRecords.length;
-
+  els.tabs.querySelectorAll("[data-view]").forEach(btn => btn.classList.toggle("active", btn.dataset.view === state.view));
   const renderers = {
     home: renderHome,
     capture: renderCapture,
     notifications: () => renderRecordBrowser("notifications", ["notification"], "Notifications"),
     notes: () => renderRecordBrowser("notes", ["quick_note"], "Notes"),
-    settings: renderSettings
+    journal: renderJournal, tasks: renderTasks, yoga: renderYoga, settings: renderSettings
   };
   els.viewRoot.innerHTML = renderers[state.view]?.() || renderHome();
   bindViewEvents();
 }
 
 function renderHome() {
-  const recent = getActiveRecords().slice(0, 6);
+  const recent = getActiveRecords().sort(sortUpdatedDesc).slice(0, 6);
   return `
     <section class="panel"><h2>Quick Capture</h2>${captureFormHtml("quick_note")}</section>
-    <section class="panel"><h2>Recent</h2><div class="list">${recent.map(recordCardHtml).join("")}</div></section>
+    <section class="panel"><h2>Recent</h2><div class="list">${recent.length ? recent.map(recordCardHtml).join("") : emptyHtml("No records yet.")}</div></section>
   `;
 }
 
-function renderCapture() {
-  return `<section class="panel"><h2>Capture</h2>${captureFormHtml("quick_note", true)}</section>`;
-}
-
+function renderCapture() { return `<section class="panel"><h2>Capture</h2>${captureFormHtml("quick_note", true)}</section>`; }
+function renderJournal() { return renderRecordBrowser("journal", ["journal"], "Journal"); }
+function renderTasks() { return renderRecordBrowser("tasks", ["task", "purchase"], "Tasks / Purchases"); }
+function renderYoga() { return renderRecordBrowser("yoga", ["yoga_note"], "Yoga"); }
 function renderRecordBrowser(view, types, title) {
-  const records = getActiveRecords().filter(r => types.includes(r.type));
-  return `<section class="panel"><h2>${title}</h2><div class="list">${records.map(recordCardHtml).join("")}</div></section>`;
+  const records = getActiveRecords().filter(r => types.includes(r.type)).sort(sortUpdatedDesc);
+  return `<section class="panel"><h2>${title}</h2><div class="list">${records.length ? records.map(recordCardHtml).join("") : emptyHtml("Nothing found.")}</div></section>`;
 }
 
 function captureFormHtml(defaultType) {
@@ -442,21 +432,29 @@ function captureFormHtml(defaultType) {
     <form class="capture-form" data-form="record">
       <input type="hidden" name="type" value="${defaultType}">
       <textarea name="body" rows="3" placeholder="Write something..."></textarea>
-      <button class="primary" type="submit">Save</button>
+      <div class="toolbar"><button class="primary" type="submit">Save Record</button></div>
     </form>
   `;
 }
 
 function renderSettings() {
-  return `<section class="panel"><h2>Settings</h2><button class="danger" data-action="lock">Lock Vault</button></section>`;
+  return `
+    <section class="panel">
+      <h2>App</h2>
+      <div class="toolbar">
+        <button onclick="location.reload(true)">Force Reload (Fix Cache)</button>
+        <button class="danger" data-action="lock">Lock Vault</button>
+      </div>
+    </section>
+  `;
 }
 
 function recordCardHtml(record) {
   return `
     <article class="record-card">
       <div class="record-head"><strong>${escapeHtml(record.title)}</strong></div>
-      <p>${escapeHtml(record.body)}</p>
-      <div class="tags">${record.tagIds.map(id => `<span class="tag">${id}</span>`).join("")}</div>
+      <p class="record-body">${escapeHtml(record.body)}</p>
+      <div class="tags">${record.tagIds.map(id => `<span class="tag">${escapeHtml(tagName(id))}</span>`).join("")}</div>
     </article>
   `;
 }
@@ -469,11 +467,7 @@ function bindViewEvents() {
 async function saveRecordFromForm(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-  const record = normalizeRecord({
-    type: data.type,
-    title: firstLine(data.body),
-    body: data.body
-  });
+  const record = normalizeRecord({ type: data.type, title: firstLine(data.body), body: data.body });
   state.data.records.unshift(record);
   await saveAndRender("Saved.");
 }
@@ -497,21 +491,29 @@ async function readVaultData(dirHandle, vaultKey) {
 }
 
 function getActiveRecords() { return state.data?.records || []; }
-
-function firstLine(v) { return v.split("\n")[0].slice(0, 50) || "Untitled"; }
-
-function today() { return new Date().toISOString().slice(0, 10); }
+function firstLine(v) { return v.split("\n")[0].slice(0, 60) || "Untitled"; }
+function tagName(id) { return state.data?.tags?.find(t => t.id === id)?.name || id; }
+function sortUpdatedDesc(a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)); }
+function tagNamesToIds(names) { return names.map(n => {
+    const existing = state.data.tags.find(t => t.name === n);
+    if (existing) return existing.id;
+    const id = crypto.randomUUID();
+    state.data.tags.push({ id, name: n, createdAt: new Date().toISOString() });
+    return id;
+}); }
 
 function lockVault(msg = "Locked.") {
-  state.vaultKey = null; state.data = null;
+  state.vaultKey = null; state.data = null; state.currentPassword = null;
   els.appStatus.textContent = "Locked";
+  els.workspacePanel.classList.add("hidden");
   showUnlock("unlock");
   toast(msg);
 }
 
 function resetLockTimer() {
+  if (!state.vaultKey) return;
   clearTimeout(state.lockTimer);
-  state.lockTimer = setTimeout(() => lockVault(), LOCK_TIMEOUT_MS);
+  state.lockTimer = setTimeout(() => lockVault("Inactivity lock."), LOCK_TIMEOUT_MS);
 }
 
 async function deriveKey(password, salt, iterations) {
@@ -549,7 +551,10 @@ async function ensurePermission(h, w) { return true; }
 async function hasPermission(h, w) { return true; }
 
 async function writeTextFile(dirHandle, fileName, text) {
-  if (dirHandle.isNative) { NativeStorage.writeFile(fileName, text); return; }
+  if (dirHandle.isNative) {
+    if (!getNative().writeFile(fileName, text)) throw new Error("Native write failed");
+    return;
+  }
   const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
   const writable = await fileHandle.createWritable();
   await writable.write(text);
@@ -602,13 +607,14 @@ function base64ToBytes(base64) {
 }
 
 function escapeHtml(v) { return String(v ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
-
-function formatDate(v) { return v ? new Date(v).toLocaleString() : "Never"; }
-
-function cleanError(e) { return e?.message || "Error"; }
+function emptyHtml(m) { return `<p class="empty">${escapeHtml(m)}</p>`; }
+function cleanError(error, fallback = "Error") {
+  if (error?.name === "AbortError") return "Selection cancelled.";
+  return error?.message || fallback;
+}
 
 function toast(msg) {
   els.toast.textContent = msg;
   els.toast.classList.remove("hidden");
-  setTimeout(() => els.toast.classList.add("hidden"), 3000);
+  setTimeout(() => els.toast.classList.add("hidden"), 3500);
 }
