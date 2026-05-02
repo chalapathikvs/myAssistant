@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.1";
+const APP_VERSION = "0.2.2";
 const META_FILE = "meta.json";
 const VAULT_FILE = "vault.json.enc";
 const FILES_DIR = "files";
@@ -12,6 +12,7 @@ const TRASH_DAYS = 10;
 const VIEW_TITLES = {
   home: "Home",
   capture: "Capture",
+  notifications: "Notifications",
   notes: "Notes",
   journal: "Journal",
   tasks: "Tasks / Purchases",
@@ -23,6 +24,7 @@ const VIEW_TITLES = {
 
 const RECORD_TYPES = {
   quick_note: "Quick note",
+  notification: "Notification",
   journal: "Journal",
   task: "Task",
   purchase: "Purchase",
@@ -35,6 +37,7 @@ const RECORD_TYPES = {
 
 const DEFAULT_TAGS = [
   "note",
+  "notification",
   "win",
   "log",
   "mood",
@@ -105,6 +108,7 @@ async function init() {
   registerServiceWorker();
   checkForAppUpdate();
   bindEvents();
+  initNativeBridge();
 
   const savedHandle = await getSavedHandle();
   if (savedHandle) {
@@ -144,6 +148,38 @@ function bindEvents() {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && state.vaultKey) lockVault("Vault locked while app was hidden.");
   });
+}
+
+function initNativeBridge() {
+  window.onNotificationReceived = async function(data) {
+    console.log("Native notification received:", data);
+
+    if (!state.vaultKey || !state.data) {
+      console.log("Vault locked, ignoring notification for now.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const record = normalizeRecord({
+      type: "notification",
+      title: `${data.title || "No Title"} (${data.package})`,
+      body: data.text || "",
+      tagIds: tagNamesToIds(["notification", data.package.split(".").pop()]),
+      createdAt: now,
+      updatedAt: now,
+      data: {
+        package: data.package,
+        intent: data.intent
+      }
+    });
+
+    state.data.records.unshift(record);
+    await saveVaultData();
+    if (state.view === "notifications" || state.view === "home") {
+      renderView();
+    }
+    toast(`Notification captured from ${data.package}`);
+  };
 }
 
 function renderSupportChecks() {
@@ -461,6 +497,7 @@ function renderView() {
   const renderers = {
     home: renderHome,
     capture: renderCapture,
+    notifications: () => renderRecordBrowser("notifications", ["notification"], "Notifications"),
     notes: () => renderRecordBrowser("notes", ["quick_note"], "Notes"),
     journal: renderJournal,
     tasks: renderTasks,
@@ -805,6 +842,7 @@ function recordCardHtml(record) {
       ${record.body ? `<p class="record-body">${escapeHtml(record.body)}</p>` : ""}
       ${record.data?.dueAt ? `<p class="meta">Due: ${escapeHtml(record.data.dueAt)}</p>` : ""}
       ${record.data?.mood ? `<p class="meta">Mood: ${escapeHtml(record.data.mood)}</p>` : ""}
+      ${record.data?.package ? `<p class="meta">App: ${escapeHtml(record.data.package)}</p>` : ""}
       ${record.linkedFileIds?.length ? `<p class="meta">Linked files: ${record.linkedFileIds.length}</p>` : ""}
       <div class="tags">${record.tagIds.map(tagId => `<span class="tag">${escapeHtml(tagName(tagId))}</span>`).join("")}</div>
       <div class="card-actions">
